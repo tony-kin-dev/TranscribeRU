@@ -1,30 +1,57 @@
-"""Движок GigaAM-v3 (`ai-sage/GigaAM-v3`) на PyTorch через transformers.
+"""Движок GigaAM-v3 через официальный пакет `gigaam` (Salute).
 
-Conformer/RNN-T-модель от Salute с сильным качеством на русском. Модель грузится
-через `trust_remote_code` (свой `modeling_gigaam.py`). Тяжёлые зависимости
-(`torch`/`transformers`) импортируются лениво внутри `load`, чтобы импорт самого
-модуля движка (и его регистрация в реестре) был дешёвым.
+Публичный API `gigaam` принимает ПУТЬ к файлу (`model.transcribe(path)`), а не
+массив. Ядро же владеет декодом и нарезкой (silero-vad) и отдаёт движку numpy-окно
+<25с. Поэтому движок пишет окно во временный 16 кГц mono wav и зовёт публичный
+`transcribe` (вариант B — устойчив к версиям, не лезет во внутренности модели).
+
+pyannote НЕ требуется: он живёт в extra `gigaam[longform]`, а longform-режим
+(gated `pyannote/segmentation-3.0` + HF_TOKEN) мы не используем — нарезку длинных
+файлов делает silero-vad в ядре.
+
+Тяжёлый импорт `gigaam` отложен в `_default_model_loader`, поэтому импорт модуля
+движка (и его регистрация) дёшев и не тянет torch.
 """
 
 from __future__ import annotations
 
+import os
+import tempfile
+import wave
+
+import numpy as np
+
 from transcribe_ru.engines.base import Engine, register
 
-MODEL_ID = "ai-sage/GigaAM-v3"
-
-# Варианты модели (revision на HF). e2e_* дают пунктуацию + нормализацию из коробки.
+# Варианты модели. В именах пакета gigaam — с префиксом версии: "v3_<variant>".
 VARIANTS = ("e2e_rnnt", "e2e_ctc", "rnnt", "ctc")
 DEFAULT_VARIANT = "e2e_rnnt"
 
 
-def _default_model_loader(variant: str, device: str):
-    """Загрузить GigaAM-v3 нужного варианта и перенести на устройство."""
-    from transformers import AutoModel
+def _default_model_loader(model_name: str, device: str):
+    """Загрузить модель пакетом gigaam на нужное устройство.
 
-    model = AutoModel.from_pretrained(
-        MODEL_ID, revision=variant, trust_remote_code=True
-    )
-    return model.to(device)
+    fp16-энкодер включаем только на ускорителях (cuda/mps); на CPU fp16
+    бессмысленен и местами не поддержан, поэтому там fp32.
+    """
+    import gigaam
+
+    fp16_encoder = device not in ("cpu", None)
+    return gigaam.load_model(model_name, fp16_encoder=fp16_encoder, device=device)
+
+
+def _write_temp_wav(wav, sr: int) -> str:
+    """Записать float32-окно во временный 16-бит mono wav; вернуть путь."""
+    pcm = np.clip(np.asarray(wav, dtype=np.float32), -1.0, 1.0)
+    pcm = (pcm * 32767.0).astype("<i2")
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm.tobytes())
+    return path
 
 
 @register("gigaam")
@@ -38,15 +65,19 @@ class GigaAMEngine(Engine):
                 f"Неизвестный вариант {variant!r}; допустимы: {', '.join(VARIANTS)}"
             )
         self.variant = variant
+        self.model_name = f"v3_{variant}"
         self._model_loader = model_loader or _default_model_loader
         self._model = None
 
     def load(self, device: str) -> None:
-        self._model = self._model_loader(self.variant, device)
+        self._model = self._model_loader(self.model_name, device)
 
     def transcribe_segment(self, wav, sr: int) -> str:
         if self._model is None:
             raise RuntimeError("Движок не загружен; сначала вызовите load(device).")
-        # Окно <25с (ниже LONGFORM_THRESHOLD), поэтому обычный transcribe,
-        # а не transcribe_longform (тот тянет gated pyannote).
-        return self._model.transcribe(wav).strip()
+        path = _write_temp_wav(wav, sr)
+        try:
+            result = self._model.transcribe(path)
+        finally:
+            os.unlink(path)
+        return str(result).strip()

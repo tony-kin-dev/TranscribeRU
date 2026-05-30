@@ -13,8 +13,8 @@ Whisper-large-v3 (средний WER ~8.4% против ~25% на их бенч�
 Это **отдельный проект**, не связанный с `whisper-transcribe`. Причина:
 `whisper-transcribe` жёстко завязан на `whisperkit-cli`/CoreML (только macOS/Apple
 Silicon) и понимает только архитектуру Whisper. GigaAM — другая архитектура, через
-WhisperKit не запускается. Чистый PyTorch + `transformers` даёт кроссплатформенность
-(Linux/macOS/Windows) сам по себе.
+WhisperKit не запускается. Чистый PyTorch (через официальный пакет `gigaam`) даёт
+кроссплатформенность (Linux/macOS/Windows) сам по себе.
 
 ### Решения, зафиксированные на брейншторминге
 - **Рамки:** платформа под много моделей (движки-плагины), но на старте — только ASR.
@@ -77,16 +77,26 @@ ENGINES: dict[str, type[Engine]] = {"gigaam": GigaAMEngine}
 
 ## 4. Движок GigaAM (`engines/gigaam.py`)
 
-- Загрузка: `transformers.AutoModel.from_pretrained("ai-sage/GigaAM-v3",
-  revision=<variant>, trust_remote_code=True)`, перенос на `device`.
+> **Уточнение по факту интеграции (2026-05-30).** Изначально планировался маршрут
+> `transformers.AutoModel.from_pretrained("ai-sage/GigaAM-v3", trust_remote_code=True)`.
+> Интеграционный (`@slow`) тест вскрыл две проблемы этого маршрута: (1) transformers
+> сканирует импорты `modeling_gigaam.py` и **требует `pyannote` в окружении при любой
+> загрузке** (хотя реально pyannote нужен лишь в longform); (2) `model.transcribe()`
+> принимает **путь к файлу, не массив**. Поэтому перешли на официальный пакет
+> **`gigaam`** (Salute), где pyannote вынесен в extra `gigaam[longform]`.
+
+- Загрузка: `gigaam.load_model("v3_<variant>", device=device)`.
 - Вариант по умолчанию — **`e2e_rnnt`** (пунктуация + нормализация из коробки).
-  Доступны: `e2e_rnnt`, `e2e_ctc`, `rnnt`, `ctc` (через `--variant`).
-- `transcribe_segment` зовёт `model.transcribe()` на одном окне (<25с —
-  ниже `LONGFORM_THRESHOLD` GigaAM). Не используем `transcribe_longform`,
-  чтобы не тянуть gated `pyannote`.
-- Зависимости движка (`torch`, `transformers`, `hydra-core`, `omegaconf`,
-  `sentencepiece`) ставятся всегда; GigaAM грузит свой `modeling_gigaam.py`
-  через `trust_remote_code`.
+  Доступны: `e2e_rnnt`, `e2e_ctc`, `rnnt`, `ctc` (через `--variant`); движок
+  маппит их в имена пакета `v3_e2e_rnnt`, `v3_e2e_ctc`, `v3_rnnt`, `v3_ctc`.
+- `transcribe_segment` получает numpy-окно <25с (ниже `LONGFORM_THRESHOLD = 25с`),
+  пишет его во временный 16 кГц mono wav и зовёт публичный `model.transcribe(path)`
+  (вариант B — устойчив к версиям, не использует внутренние атрибуты модели).
+  `transcribe_longform` не используем — нарезку длинных файлов делает silero-vad
+  в ядре, поэтому gated `pyannote/segmentation-3.0` и `HF_TOKEN` не нужны.
+- Зависимость движка — пакет `gigaam` (тянет `torch<=2.5.1`, `torchaudio`,
+  `hydra-core`, `omegaconf`, `sentencepiece`, `onnx`/`onnxruntime`). Из-за пинов
+  пакета требуется **Python 3.11/3.12** (на 3.13+ нет колёс).
 
 ## 5. Нарезка (`segmentation.py`)
 
@@ -133,9 +143,11 @@ transcribe-ru --audio file.opus --format srt
 
 ## 10. Зависимости и окружение
 
-- Менеджер: `uv`. Python **3.11+**.
-- Пакеты: `torch`, `torchaudio`, `transformers`, `silero-vad`, `sentencepiece`,
-  `hydra-core`, `omegaconf`.
+- Менеджер: `uv` (или `pip`). Python **3.11/3.12** (пакет `gigaam` пинит
+  `torch<=2.5.1`/`onnxruntime`, под 3.13+ колёс нет).
+- Пакеты: `gigaam` (тянет `torch`, `torchaudio`, `sentencepiece`, `hydra-core`,
+  `omegaconf`, `onnx`/`onnxruntime`), `silero-vad`. pyannote — НЕ ставим
+  (он только в extra `gigaam[longform]`, который не используем).
 - Системно: `ffmpeg`.
 - Ускорение: CUDA (Linux/Windows), MPS (macOS Apple Silicon), CPU-фолбэк.
 

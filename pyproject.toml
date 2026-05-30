@@ -3,16 +3,17 @@ name = "transcribe-ru"
 version = "0.1.0"
 description = "Кроссплатформенная CLI-платформа ASR на PyTorch-движках (первый движок — GigaAM-v3)"
 readme = "README.md"
-requires-python = ">=3.11"
+# v3 есть только в gigaam из git (PyPI 0.1.0 знает лишь v1/v2). Верхняя граница
+# Python — консервативно по проверенному окружению (3.12) и колёсам onnxruntime.
+requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 dependencies = [
-    "torch",
-    "torchaudio",
-    "transformers",
+    # Официальный пакет Salute, из git ради поддержки v3-моделей (v3_e2e_rnnt и др.).
+    # Extra [torch] добавляет torch/torchaudio. Тянет также hydra/omegaconf/
+    # sentencepiece/onnx*/soundfile. pyannote — только в extra "longform", который
+    # мы не используем (нарезку длинных файлов делает silero-vad в ядре).
+    "gigaam[torch] @ git+https://github.com/salute-developers/GigaAM.git",
     "silero-vad",
-    "sentencepiece",
-    "hydra-core",
-    "omegaconf",
 ]
 
 [project.scripts]
@@ -27,6 +28,10 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# Разрешить git-ссылку на gigaam (v3 есть только там, не на PyPI).
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/transcribe_ru"]

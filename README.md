@@ -17,7 +17,8 @@
 
 ## Установка
 
-Требуется Python 3.11+ и системный `ffmpeg`.
+Требуется Python **3.11/3.12** (пакет `gigaam` пинит `torch<=2.5.1`/`onnxruntime`,
+под 3.13+ колёс нет) и системный `ffmpeg`.
 
 ```bash
 uv sync            # или: pip install -e .
