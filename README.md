@@ -1,8 +1,8 @@
 # TranscribeRU
 
 Кроссплатформенная CLI-платформа для распознавания речи (ASR) на PyTorch-движках.
-Первый движок — **GigaAM-v3** (`ai-sage/GigaAM-v3`), Conformer/RNN-T от Salute
-с заметно лучшим качеством на русском, чем Whisper-large-v3.
+Первый движок — **GigaAM-v3** (Conformer/RNN-T от Salute, через официальный пакет
+`gigaam`) с заметно лучшим качеством на русском, чем Whisper-large-v3.
 
 Архитектура движков-плагинов: ядро владеет нарезкой длинного аудио и сборкой
 сегментов, движок отвечает только за «звук одного окна → текст». Добавить новый
@@ -17,27 +17,48 @@
 
 ## Установка
 
-Требуется Python **3.11/3.12** (пакет `gigaam` пинит `torch<=2.5.1`/`onnxruntime`,
-под 3.13+ колёс нет) и системный `ffmpeg`.
+Нужны:
+- **Python 3.11 или 3.12** (проверено; зависимости `gigaam` могут не иметь колёс
+  под новейшие версии Python);
+- системный **`ffmpeg`** (`brew install ffmpeg` / `apt install ffmpeg` / `winget install ffmpeg`);
+- **`git`** — поддержка v3-моделей есть только в git-версии пакета `gigaam`
+  (на PyPI ещё нет), поэтому она ставится из репозитория.
 
 ```bash
-uv sync            # или: pip install -e .
+python3.12 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e .
 ```
+
+> **Первый запуск** скачивает веса модели (~430 МБ для `v3_e2e_rnnt`) в
+> `~/.cache/gigaam` — дальше они берутся из кэша. HF-токен не нужен.
 
 ## Использование
 
 ```bash
-transcribe-ru --audio file.opus
-transcribe-ru --audio file.opus --variant e2e_ctc --device cpu --out-dir ./out
-transcribe-ru --audio file.opus --format srt
+transcribe-ru --audio file.opus                    # txt с тайм-кодами рядом с исходником
+transcribe-ru --audio file.opus --format srt       # субтитры .srt
+transcribe-ru --audio file.opus --device cpu --out-dir ./out
+transcribe-ru --audio file.opus --dry-run          # показать план, ничего не запуская
 ```
+
+Пример: на входе речь «привет как дела сегодня очень хорошая погода» получится
+файл рядом с исходником с содержимым:
+
+```
+00:00:00
+Привет! Как дела сегодня? Очень хорошая погода.
+```
+
+(пунктуация и заглавные — заслуга варианта `e2e_rnnt`). Прогресс печатается в
+`stderr`, результат — файл с тем же именем и расширением по формату.
 
 | Флаг | По умолчанию | Описание |
 |------|--------------|----------|
-| `--audio` | — (обяз.) | Входной аудиофайл |
+| `--audio` | — (обяз.) | Входной аудиофайл (любой формат, который читает ffmpeg) |
 | `--engine` | `gigaam` | Движок ASR |
 | `--variant` | `e2e_rnnt` | Вариант модели: `e2e_rnnt`, `e2e_ctc`, `rnnt`, `ctc` |
-| `--device` | `auto` | `auto`, `cuda`, `mps`, `cpu` |
+| `--device` | `auto` | `auto` (cuda→mps→cpu), либо явно `cuda`/`mps`/`cpu` |
 | `--format` | `txt_timecoded` | `txt_timecoded`, `txt_plain`, `srt`, `json` |
 | `--out-dir` | рядом с исходником | Каталог для результата |
 | `--dry-run` | — | Показать план без запуска |
