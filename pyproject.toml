@@ -12,7 +12,7 @@ dependencies = [
     # Extra [torch] добавляет torch/torchaudio. Тянет также hydra/omegaconf/
     # sentencepiece/onnx*/soundfile. pyannote — только в extra "longform", который
     # мы не используем (нарезку длинных файлов делает silero-vad в ядре).
-    "gigaam[torch] @ git+https://github.com/salute-developers/GigaAM.git",
+    "gigaam[torch] @ git+https://github.com/salute-developers/GigaAM.git@6e4b027c6fb554e09e8b9059b757a175295ab879",
     "silero-vad",
 ]
 
