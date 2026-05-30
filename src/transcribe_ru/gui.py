@@ -18,14 +18,39 @@ import sys
 import threading
 from pathlib import Path
 
-FORMATS = ("txt_timecoded", "txt_plain", "srt", "json")
-VARIANTS = ("e2e_rnnt", "e2e_ctc", "rnnt", "ctc")
-DEVICES = ("auto", "cuda", "mps", "cpu")
+# Пары (русская подпись для пользователя, техническое значение для движка).
+# Первый элемент в каждом списке — значение по умолчанию.
+FORMAT_CHOICES = [
+    ("Текст с тайм-кодами (ЧЧ:ММ:СС)", "txt_timecoded"),
+    ("Сплошной текст без тайм-кодов", "txt_plain"),
+    ("Субтитры (.srt)", "srt"),
+    ("JSON (для разработчиков)", "json"),
+]
+VARIANT_CHOICES = [
+    ("С пунктуацией, точнее (рекомендуется)", "e2e_rnnt"),
+    ("С пунктуацией, быстрее", "e2e_ctc"),
+    ("Без пунктуации, точнее", "rnnt"),
+    ("Без пунктуации, быстрее", "ctc"),
+]
+DEVICE_CHOICES = [
+    ("Автоматически (рекомендуется)", "auto"),
+    ("Видеокарта NVIDIA (CUDA)", "cuda"),
+    ("Чип Apple (MPS)", "mps"),
+    ("Процессор (CPU, медленно)", "cpu"),
+]
 
 AUDIO_TYPES = [
     ("Аудио", "*.opus *.m4a *.mp3 *.wav *.aiff *.flac *.ogg *.aac *.wma"),
     ("Все файлы", "*"),
 ]
+
+
+def label_to_value(choices, label: str) -> str:
+    """Вернуть техническое значение по выбранной русской подписи."""
+    for lab, value in choices:
+        if lab == label:
+            return value
+    raise KeyError(label)
 
 
 class TranscribeApp:
@@ -44,10 +69,12 @@ class TranscribeApp:
         root.title("TranscribeRU")
         root.resizable(False, False)
 
+        # в переменных хранятся русские ПОДПИСИ; значение для движка получаем
+        # через label_to_value при запуске
         self.audio_path = tk.StringVar()
-        self.fmt = tk.StringVar(value=FORMATS[0])
-        self.variant = tk.StringVar(value=VARIANTS[0])
-        self.device = tk.StringVar(value=DEVICES[0])
+        self.fmt = tk.StringVar(value=FORMAT_CHOICES[0][0])
+        self.variant = tk.StringVar(value=VARIANT_CHOICES[0][0])
+        self.device = tk.StringVar(value=DEVICE_CHOICES[0][0])
         self.status = tk.StringVar(value="Выберите аудиофайл")
 
         self._build()
@@ -63,9 +90,9 @@ class TranscribeApp:
         )
         ttk.Button(frm, text="Выбрать…", command=self._choose_file).grid(row=0, column=2)
 
-        self._combo(frm, "Формат:", self.fmt, FORMATS, 1)
-        self._combo(frm, "Вариант:", self.variant, VARIANTS, 2)
-        self._combo(frm, "Устройство:", self.device, DEVICES, 3)
+        self._combo(frm, "Формат:", self.fmt, [c[0] for c in FORMAT_CHOICES], 1)
+        self._combo(frm, "Вариант:", self.variant, [c[0] for c in VARIANT_CHOICES], 2)
+        self._combo(frm, "Устройство:", self.device, [c[0] for c in DEVICE_CHOICES], 3)
 
         self.run_btn = ttk.Button(frm, text="Транскрибировать", command=self._start)
         self.run_btn.grid(row=4, column=0, columnspan=3, pady=(10, 4), sticky="we")
@@ -105,8 +132,10 @@ class TranscribeApp:
         self.status.set("Подготовка модели и аудио…")
 
         params = dict(
-            audio=audio, fmt=self.fmt.get(), variant=self.variant.get(),
-            device=self.device.get(),
+            audio=audio,
+            fmt=label_to_value(FORMAT_CHOICES, self.fmt.get()),
+            variant=label_to_value(VARIANT_CHOICES, self.variant.get()),
+            device=label_to_value(DEVICE_CHOICES, self.device.get()),
         )
         self.worker = threading.Thread(target=self._run_job, args=(params,), daemon=True)
         self.worker.start()
