@@ -33,7 +33,32 @@
 
 Границы окон, найденные VAD, становятся тайм-кодами сегментов на выходе.
 
-## Установка
+## Быстрая установка (в один шаг)
+
+Скрипт сам поставит всё: пакетный менеджер (если нужно), Python 3.12, ffmpeg, git,
+сам проект с зависимостями в отдельном окружении, и положит иконку запуска на
+Рабочий стол. Где автоустановка невозможна без участия владельца — скрипт укажет
+ссылку.
+
+**macOS** — в Терминале:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tony-kin-dev/TranscribeRU/main/scripts/install.command | bash
+```
+
+**Windows** — в PowerShell:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/tony-kin-dev/TranscribeRU/main/scripts/install.ps1 | iex
+```
+
+(либо скачайте `scripts/install.bat` и `scripts/install.ps1` и дважды кликните
+`install.bat`).
+
+После установки на Рабочем столе появится иконка **TranscribeRU** — двойной клик
+открывает окно. Повторный запуск скрипта обновляет установку.
+
+## Установка вручную (или для разработки)
 
 Нужны:
 
