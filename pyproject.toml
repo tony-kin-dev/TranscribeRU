@@ -1,0 +1,39 @@
+[project]
+name = "transcribe-ru"
+version = "0.1.0"
+description = "Кроссплатформенная CLI-платформа ASR на PyTorch-движках (первый движок — GigaAM-v3)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "torch",
+    "torchaudio",
+    "transformers",
+    "silero-vad",
+    "sentencepiece",
+    "hydra-core",
+    "omegaconf",
+]
+
+[project.scripts]
+transcribe-ru = "transcribe_ru.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "numpy",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/transcribe_ru"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: интеграционные тесты, скачивающие модель (пропускаются по умолчанию)",
+]
+addopts = "-m 'not slow'"
