@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from pathlib import Path
 
 from transcribe_ru.engines.gigaam import DEFAULT_VARIANT
-from transcribe_ru.formatters import EXTENSIONS, format_result
+from transcribe_ru.runner import output_path, transcribe_to_file
 
 FORMATS = ("txt_timecoded", "txt_plain", "srt", "json")
+
+# Совместимость: output_path исторически жил в cli; теперь общий, в runner.
+__all__ = ["build_parser", "output_path", "main"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,14 +33,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", default=None, help="Каталог результата (по умолчанию — рядом с исходником)")
     p.add_argument("--dry-run", action="store_true", help="Показать план и выйти")
     return p
-
-
-def output_path(audio_path: str, fmt: str, out_dir: str | None) -> Path:
-    """Путь результата: имя исходника + расширение формата."""
-    src = Path(audio_path)
-    name = src.stem + EXTENSIONS[fmt]
-    folder = Path(out_dir) if out_dir else src.parent
-    return folder / name
 
 
 def _make_progress(stream):
@@ -67,35 +61,30 @@ def main(
     args = build_parser().parse_args(argv)
     stderr = stderr or sys.stderr
 
-    if transcribe_fn is None:
-        from transcribe_ru.core import transcribe as transcribe_fn
-    if get_engine_fn is None:
-        from transcribe_ru.engines.base import get_engine as get_engine_fn
-    if select_device_fn is None:
-        from transcribe_ru.device import select_device as select_device_fn
-
-    device = select_device_fn(args.device)
-    out_file = output_path(args.audio, args.format, args.out_dir)
-
     if args.dry_run:
+        # для плана достаточно резолва устройства и пути; саму работу не делаем
+        if select_device_fn is None:
+            from transcribe_ru.device import select_device as select_device_fn
+        device = select_device_fn(args.device)
+        out_file = output_path(args.audio, args.format, args.out_dir)
         stderr.write(
             f"[dry-run] движок={args.engine} вариант={args.variant} устройство={device}\n"
             f"[dry-run] {args.audio} → {out_file} (формат {args.format})\n"
         )
         return 0
 
-    engine_cls = get_engine_fn(args.engine)
-    engine = engine_cls(variant=args.variant)
-
-    result = transcribe_fn(
-        args.audio, engine, device=device, on_progress=_make_progress(stderr)
+    out_file = transcribe_to_file(
+        args.audio,
+        engine=args.engine,
+        variant=args.variant,
+        device=args.device,
+        fmt=args.format,
+        out_dir=args.out_dir,
+        on_progress=_make_progress(stderr),
+        transcribe_fn=transcribe_fn,
+        get_engine_fn=get_engine_fn,
+        select_device_fn=select_device_fn,
     )
-
-    meta = {"engine": args.engine, "variant": args.variant}
-    text = format_result(result.segments, args.format, meta=meta)
-
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    out_file.write_text(text, encoding="utf-8")
     stderr.write(f"Готово: {out_file}\n")
     return 0
 
