@@ -39,8 +39,13 @@ DEVICE_CHOICES = [
     ("Процессор (CPU, медленно)", "cpu"),
 ]
 
-AUDIO_TYPES = [
-    ("Аудио", "*.opus *.m4a *.mp3 *.wav *.aiff *.flac *.ogg *.aac *.wma"),
+# ffmpeg извлекает аудиодорожку и из видео, поэтому принимаем и медиа-видео.
+_AUDIO_PATTERN = "*.opus *.m4a *.mp3 *.wav *.aiff *.flac *.ogg *.aac *.wma"
+_VIDEO_PATTERN = "*.mp4 *.mov *.mkv *.avi *.webm *.m4v *.flv *.wmv *.mpeg *.mpg"
+MEDIA_TYPES = [
+    ("Медиа (аудио и видео)", f"{_AUDIO_PATTERN} {_VIDEO_PATTERN}"),
+    ("Аудио", _AUDIO_PATTERN),
+    ("Видео", _VIDEO_PATTERN),
     ("Все файлы", "*"),
 ]
 
@@ -75,7 +80,7 @@ class TranscribeApp:
         self.fmt = tk.StringVar(value=FORMAT_CHOICES[0][0])
         self.variant = tk.StringVar(value=VARIANT_CHOICES[0][0])
         self.device = tk.StringVar(value=DEVICE_CHOICES[0][0])
-        self.status = tk.StringVar(value="Выберите аудиофайл")
+        self.status = tk.StringVar(value="Выберите аудио- или видеофайл")
 
         self._build()
 
@@ -112,7 +117,9 @@ class TranscribeApp:
     def _choose_file(self):
         from tkinter import filedialog
 
-        path = filedialog.askopenfilename(title="Выберите аудиофайл", filetypes=AUDIO_TYPES)
+        path = filedialog.askopenfilename(
+            title="Выберите аудио- или видеофайл", filetypes=MEDIA_TYPES
+        )
         if path:
             self.audio_path.set(path)
             self.status.set("Готов к запуску")
@@ -124,7 +131,7 @@ class TranscribeApp:
             return
         audio = self.audio_path.get().strip()
         if not audio:
-            messagebox.showwarning("Нет файла", "Сначала выберите аудиофайл.")
+            messagebox.showwarning("Нет файла", "Сначала выберите аудио- или видеофайл.")
             return
 
         self.run_btn.state(["disabled"])
@@ -216,6 +223,10 @@ def main(argv=None) -> int:
         help="Создать ярлык TranscribeRU.command на Рабочем столе и выйти.",
     )
     args = parser.parse_args(argv)
+
+    from transcribe_ru.certs import configure_ssl
+
+    configure_ssl()  # лечит CERTIFICATE_VERIFY_FAILED при скачивании модели
 
     if args.install_shortcut:
         path = install_shortcut()

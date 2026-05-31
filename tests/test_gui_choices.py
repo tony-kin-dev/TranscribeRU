@@ -54,3 +54,17 @@ def test_label_to_value_unknown_raises():
 
     with pytest.raises(KeyError):
         gui.label_to_value(gui.FORMAT_CHOICES, "нет такой подписи")
+
+
+def test_media_filetypes_include_audio_and_video():
+    patterns = " ".join(pattern for _, pattern in gui.MEDIA_TYPES).lower()
+    # аудио
+    for ext in ("opus", "mp3", "wav", "m4a"):
+        assert ext in patterns
+    # видео
+    for ext in ("mp4", "mov", "mkv", "avi", "webm"):
+        assert ext in patterns
+
+
+def test_media_filetypes_have_all_files_fallback():
+    assert any(pattern == "*" for _, pattern in gui.MEDIA_TYPES)
