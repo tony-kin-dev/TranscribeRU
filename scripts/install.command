@@ -13,7 +13,7 @@ fail() { printf '\n\033[31m%s\033[0m\n' "$1" >&2; exit 1; }
 
 # 1. Homebrew -------------------------------------------------------------
 if ! command -v brew >/dev/null 2>&1; then
-  say "Homebrew не найден — устанавливаю (может потребоваться пароль)…"
+  say "Homebrew не найден — устанавливаю (может потребоваться пароль)..."
   if ! NONINTERACTIVE=1 /bin/bash -c \
       "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
     fail "Не удалось установить Homebrew автоматически.
@@ -27,7 +27,7 @@ BREW="$(command -v brew || true)"
 [ -z "$BREW" ] && fail "Homebrew установлен, но не найден. Перезапустите терминал и скрипт."
 
 # 2. Системные зависимости -----------------------------------------------
-say "Устанавливаю Python 3.12, ffmpeg и git через Homebrew…"
+say "Устанавливаю Python 3.12, ffmpeg и git через Homebrew..."
 "$BREW" install python@3.12 ffmpeg git || fail \
   "Не удалось установить зависимости через Homebrew. Проверьте интернет и запустите снова."
 
@@ -37,23 +37,23 @@ PY="$("$BREW" --prefix python@3.12)/bin/python3.12"
 
 # 3. Код проекта ----------------------------------------------------------
 if [ -d "$DEST/.git" ]; then
-  say "Обновляю существующую установку в $DEST…"
+  say "Обновляю существующую установку в $DEST..."
   git -C "$DEST" pull --ff-only || true
 else
-  say "Скачиваю проект в $DEST…"
+  say "Скачиваю проект в $DEST..."
   mkdir -p "$(dirname "$DEST")"
   git clone "$REPO_URL" "$DEST" || fail "Не удалось клонировать $REPO_URL"
 fi
 
 # 4. Виртуальное окружение и зависимости ----------------------------------
-say "Создаю окружение и ставлю зависимости (первый раз — несколько минут)…"
+say "Создаю окружение и ставлю зависимости (первый раз — несколько минут)..."
 "$PY" -m venv "$DEST/.venv"
 "$DEST/.venv/bin/python" -m pip install --quiet --upgrade pip
 "$DEST/.venv/bin/python" -m pip install -e "$DEST" || fail \
   "Не удалось установить зависимости. Проверьте интернет и запустите снова."
 
 # 5. Иконка на Рабочем столе ----------------------------------------------
-say "Создаю иконку на Рабочем столе…"
+say "Создаю иконку на Рабочем столе..."
 "$DEST/.venv/bin/transcribe-ru-gui" --install-shortcut
 
 say "Готово! Иконка TranscribeRU.command на Рабочем столе — двойной клик запускает окно."
