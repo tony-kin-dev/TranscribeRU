@@ -58,6 +58,28 @@ def label_to_value(choices, label: str) -> str:
     raise KeyError(label)
 
 
+def reveal_in_file_manager(path, *, platform_name=None, run=None) -> None:
+    """Открыть папку с файлом в проводнике и по возможности выделить файл.
+
+    Команда зависит от ОС: macOS — `open -R`, Windows — `explorer /select,`,
+    прочее — `xdg-open` на родительскую папку. `platform_name`/`run` инъектируются
+    в тестах; по умолчанию берутся `sys.platform` и `subprocess.run`.
+    """
+    platform_name = platform_name or sys.platform
+    if run is None:
+        import subprocess
+
+        def run(cmd):
+            subprocess.run(cmd, check=False)
+
+    if platform_name == "darwin":
+        run(["open", "-R", path])
+    elif platform_name.startswith("win"):
+        run(["explorer", f"/select,{path}"])
+    else:
+        run(["xdg-open", os.path.dirname(path) or "."])
+
+
 class TranscribeApp:
     """Окно: выбор файла, настройки, запуск и прогресс."""
 
@@ -180,6 +202,11 @@ class TranscribeApp:
                     self.bar.configure(value=self.bar["maximum"])
                     self.status.set(f"Готово: {event[1]}")
                     self.run_btn.state(["!disabled"])
+                    # открыть папку с результатом (не критично, если не вышло)
+                    try:
+                        reveal_in_file_manager(event[1])
+                    except Exception:  # noqa: BLE001
+                        pass
                     return
                 elif kind == "error":
                     self.status.set("Ошибка")
