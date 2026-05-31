@@ -14,6 +14,9 @@ dependencies = [
     # мы не используем (нарезку длинных файлов делает silero-vad в ядре).
     "gigaam[torch] @ git+https://github.com/salute-developers/GigaAM.git@6e4b027c6fb554e09e8b9059b757a175295ab879",
     "silero-vad",
+    # корневые сертификаты — лечат CERTIFICATE_VERIFY_FAILED при скачивании
+    # модели через urllib (частая беда Python на macOS)
+    "certifi",
 ]
 
 [project.scripts]

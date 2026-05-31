@@ -6,6 +6,7 @@ import argparse
 import sys
 import time
 
+from transcribe_ru.certs import configure_ssl
 from transcribe_ru.engines.gigaam import DEFAULT_VARIANT
 from transcribe_ru.runner import output_path, transcribe_to_file
 
@@ -58,6 +59,7 @@ def main(
     select_device_fn=None,
     stderr=None,
 ) -> int:
+    configure_ssl()  # лечит CERTIFICATE_VERIFY_FAILED при скачивании модели
     args = build_parser().parse_args(argv)
     stderr = stderr or sys.stderr
 
