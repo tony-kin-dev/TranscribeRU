@@ -28,16 +28,39 @@ VARIANTS = ("e2e_rnnt", "e2e_ctc", "rnnt", "ctc")
 DEFAULT_VARIANT = "e2e_rnnt"
 
 
+# На Windows libtorch/sentencepiece (C++) не открывают не-ASCII пути, а кэш
+# по умолчанию лежит в ~/.cache/gigaam — у русскоязычных это путь с кириллицей.
+# Поэтому на Windows держим кэш в фиксированной ASCII-папке.
+WINDOWS_CACHE_DIR = r"C:\gigaam_cache"
+
+
+def _resolve_cache_dir(environ=None, os_name=None):
+    """Папка кэша модели: env GIGAAM_CACHE_DIR > ASCII-папка на Windows > None."""
+    environ = environ if environ is not None else os.environ
+    os_name = os_name or os.name
+    value = environ.get("GIGAAM_CACHE_DIR")
+    if value:
+        return value
+    if os_name == "nt":
+        return WINDOWS_CACHE_DIR
+    return None
+
+
 def _default_model_loader(model_name: str, device: str):
     """Загрузить модель пакетом gigaam на нужное устройство.
 
     fp16-энкодер включаем только на ускорителях (cuda/mps); на CPU fp16
-    бессмысленен и местами не поддержан, поэтому там fp32.
+    бессмысленен и местами не поддержан, поэтому там fp32. На Windows кэш
+    модели направляем в ASCII-папку (см. `_resolve_cache_dir`).
     """
     import gigaam
 
     fp16_encoder = device not in ("cpu", None)
-    return gigaam.load_model(model_name, fp16_encoder=fp16_encoder, device=device)
+    kwargs = {"fp16_encoder": fp16_encoder, "device": device}
+    cache_dir = _resolve_cache_dir()
+    if cache_dir:
+        kwargs["download_root"] = cache_dir
+    return gigaam.load_model(model_name, **kwargs)
 
 
 def _write_temp_wav(wav, sr: int) -> str:

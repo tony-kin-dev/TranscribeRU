@@ -49,7 +49,9 @@ fi
 say "Создаю окружение и ставлю зависимости (первый раз — несколько минут)..."
 "$PY" -m venv "$DEST/.venv"
 "$DEST/.venv/bin/python" -m pip install --quiet --upgrade pip
-"$DEST/.venv/bin/python" -m pip install -e "$DEST" || fail \
+# без -e: editable-режим пишет .pth, который ломается на путях с не-ASCII
+# символами; обычному пользователю editable не нужен
+"$DEST/.venv/bin/python" -m pip install "$DEST" || fail \
   "Не удалось установить зависимости. Проверьте интернет и запустите снова."
 
 # 5. Иконка на Рабочем столе ----------------------------------------------

@@ -3,8 +3,12 @@
 # Запуск: двойной клик по install.bat, либо в PowerShell:
 #   iwr -useb https://raw.githubusercontent.com/tony-kin-dev/TranscribeRU/main/scripts/install.ps1 | iex
 
-$RepoUrl = if ($env:REPO_URL) { $env:REPO_URL } else { 'https://github.com/tony-kin-dev/TranscribeRU.git' }
-$Dest    = if ($env:TRANSCRIBE_RU_DIR) { $env:TRANSCRIBE_RU_DIR } else { Join-Path $env:LOCALAPPDATA 'TranscribeRU' }
+$RepoUrl   = if ($env:REPO_URL) { $env:REPO_URL } else { 'https://github.com/tony-kin-dev/TranscribeRU.git' }
+# Папка должна быть БЕЗ кириллицы: libtorch/sentencepiece (C++) не открывают
+# не-ASCII пути. LOCALAPPDATA у русскоязычных сам бывает с кириллицей, поэтому
+# дефолт — фиксированная ASCII-папка в корне диска.
+$Dest      = if ($env:TRANSCRIBE_RU_DIR) { $env:TRANSCRIBE_RU_DIR } else { 'C:\TranscribeRU' }
+$CacheDir  = if ($env:GIGAAM_CACHE_DIR)  { $env:GIGAAM_CACHE_DIR }  else { 'C:\gigaam_cache' }
 
 function Say($m)  { Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Fail($m) { Write-Host "`n$m" -ForegroundColor Red; Read-Host 'Нажмите Enter для выхода'; exit 1 }
@@ -58,10 +62,34 @@ Say 'Создаю окружение и ставлю зависимости (п�
 & $pyExe @pyArgs -m venv "$Dest\.venv"
 $venvPy = "$Dest\.venv\Scripts\python.exe"
 & $venvPy -m pip install --quiet --upgrade pip
-& $venvPy -m pip install -e $Dest
+# БЕЗ -e: editable-режим пишет .pth в ANSI, и Python в UTF-8 его игнорирует
+# на путях с кириллицей → ModuleNotFoundError.
+& $venvPy -m pip install $Dest
 if ($LASTEXITCODE -ne 0) { Fail "Не удалось установить зависимости. Проверьте интернет и запустите снова." }
 
-# 6. Ярлык на Рабочем столе -----------------------------------------------
+# 6. Кэш модели в ASCII-папке + предзагрузка с ретраями -------------------
+Say 'Готовлю папку кэша модели и докачиваю веса...'
+New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+# чтобы приложение всегда брало ASCII-кэш — пишем переменную окружения (User)
+[Environment]::SetEnvironmentVariable('GIGAAM_CACHE_DIR', $CacheDir, 'User')
+$env:GIGAAM_CACHE_DIR = $CacheDir
+
+# Предзагружаем веса дефолтной модели — urllib в gigaam без ретраев и таймаута
+# часто рвётся на ~430 МБ. Качаем с ретраями; пропускаем, если уже есть.
+$ProgressPreference = 'SilentlyContinue'
+$cdn = 'https://cdn.chatwm.opensmodel.sberdevices.ru/GigaAM'
+$files = @('v3_e2e_rnnt.ckpt', 'v3_e2e_rnnt_tokenizer.model')
+foreach ($f in $files) {
+  $out = Join-Path $CacheDir $f
+  if (Test-Path $out) { continue }
+  try {
+    Invoke-WebRequest -Uri "$cdn/$f" -OutFile $out -MaximumRetryCount 3 -RetryIntervalSec 5
+  } catch {
+    Write-Host "Не удалось предзагрузить $f — модель скачается при первом запуске." -ForegroundColor Yellow
+  }
+}
+
+# 7. Ярлык на Рабочем столе -----------------------------------------------
 Say 'Создаю ярлык на Рабочем столе...'
 $desktop = [Environment]::GetFolderPath('Desktop')
 $lnk = Join-Path $desktop 'TranscribeRU.lnk'

@@ -240,6 +240,18 @@ def install_shortcut() -> Path:
     return shortcut
 
 
+def _write_crash_log(text: str, log_dir=None) -> Path:
+    """Записать текст ошибки в error.log; вернуть путь к файлу."""
+    if log_dir is None:
+        base = os.getenv("LOCALAPPDATA") or str(Path.home())
+        log_dir = Path(base) / "TranscribeRU"
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "error.log"
+    log_file.write_text(text, encoding="utf-8")
+    return log_file
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="transcribe-ru-gui", description="Окно для запуска транскрипции."
@@ -261,7 +273,23 @@ def main(argv=None) -> int:
         print("Двойной клик по нему открывает окно (один раз подтвердите запуск в macOS).")
         return 0
 
-    return run_gui()
+    # Ярлык на Windows запускается через pythonw — без консоли исключение
+    # пропадёт молча. Пишем трейсбек в лог и показываем окно с путём.
+    try:
+        return run_gui()
+    except Exception:
+        import traceback
+
+        log = _write_crash_log(traceback.format_exc())
+        try:
+            from tkinter import messagebox
+
+            messagebox.showerror(
+                "TranscribeRU", f"Ошибка запуска. Подробности в файле:\n{log}"
+            )
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":  # pragma: no cover
