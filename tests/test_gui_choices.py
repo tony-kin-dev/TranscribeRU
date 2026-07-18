@@ -5,7 +5,7 @@
 """
 
 from transcribe_ru import gui
-from transcribe_ru.cli import FORMATS
+from transcribe_ru.cli import FORMATS, GRANULARITIES
 from transcribe_ru.engines.gigaam import VARIANTS
 
 
@@ -29,16 +29,21 @@ def test_device_choices_cover_all_devices():
     assert set(_values(gui.DEVICE_CHOICES)) == {"auto", "cuda", "mps", "cpu"}
 
 
+def test_granularity_choices_cover_all_granularities():
+    assert set(_values(gui.GRANULARITY_CHOICES)) == set(GRANULARITIES)
+
+
 def test_defaults_are_first_choice():
     # первая подпись — значение по умолчанию
     assert gui.label_to_value(gui.FORMAT_CHOICES, _labels(gui.FORMAT_CHOICES)[0]) == "txt_timecoded"
+    assert gui.label_to_value(gui.GRANULARITY_CHOICES, _labels(gui.GRANULARITY_CHOICES)[0]) == "coarse"
     assert gui.label_to_value(gui.VARIANT_CHOICES, _labels(gui.VARIANT_CHOICES)[0]) == "e2e_rnnt"
     assert gui.label_to_value(gui.DEVICE_CHOICES, _labels(gui.DEVICE_CHOICES)[0]) == "auto"
 
 
 def test_labels_are_russian_not_raw_value():
     # подпись не должна совпадать с техническим значением (т.е. она расшифрована)
-    for choices in (gui.FORMAT_CHOICES, gui.VARIANT_CHOICES, gui.DEVICE_CHOICES):
+    for choices in (gui.FORMAT_CHOICES, gui.GRANULARITY_CHOICES, gui.VARIANT_CHOICES, gui.DEVICE_CHOICES):
         for label, value in choices:
             assert label != value
             assert any("а" <= ch <= "я" or "А" <= ch <= "Я" for ch in label)

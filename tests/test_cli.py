@@ -15,8 +15,14 @@ def test_parser_defaults():
     assert args.variant == "e2e_rnnt"
     assert args.device == "auto"
     assert args.format == "txt_timecoded"
+    assert args.granularity == "coarse"
     assert args.out_dir is None
     assert args.dry_run is False
+
+
+def test_parser_rejects_unknown_granularity():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["--audio", "f.opus", "--granularity", "medium"])
 
 
 def test_parser_requires_audio():
@@ -39,7 +45,7 @@ def test_output_path_in_out_dir_with_format_extension():
     assert p == Path("/tmp/out/voice.json")
 
 
-def _fake_transcribe(audio_path, engine, *, device, on_progress=None):
+def _fake_transcribe(audio_path, engine, *, device, granularity="coarse", on_progress=None):
     if on_progress:
         on_progress(1, 1)
     return TranscriptResult(

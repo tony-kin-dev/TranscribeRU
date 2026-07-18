@@ -32,6 +32,10 @@ VARIANT_CHOICES = [
     ("Без пунктуации, точнее", "rnnt"),
     ("Без пунктуации, быстрее", "ctc"),
 ]
+GRANULARITY_CHOICES = [
+    ("Крупные фрагменты (для чтения)", "coarse"),
+    ("Короткие реплики (для субтитров)", "fine"),
+]
 DEVICE_CHOICES = [
     ("Автоматически (рекомендуется)", "auto"),
     ("Видеокарта NVIDIA (CUDA)", "cuda"),
@@ -100,6 +104,7 @@ class TranscribeApp:
         # через label_to_value при запуске
         self.audio_path = tk.StringVar()
         self.fmt = tk.StringVar(value=FORMAT_CHOICES[0][0])
+        self.granularity = tk.StringVar(value=GRANULARITY_CHOICES[0][0])
         self.variant = tk.StringVar(value=VARIANT_CHOICES[0][0])
         self.device = tk.StringVar(value=DEVICE_CHOICES[0][0])
         self.status = tk.StringVar(value="Выберите аудио- или видеофайл")
@@ -118,16 +123,17 @@ class TranscribeApp:
         ttk.Button(frm, text="Выбрать…", command=self._choose_file).grid(row=0, column=2)
 
         self._combo(frm, "Формат:", self.fmt, [c[0] for c in FORMAT_CHOICES], 1)
-        self._combo(frm, "Вариант:", self.variant, [c[0] for c in VARIANT_CHOICES], 2)
-        self._combo(frm, "Устройство:", self.device, [c[0] for c in DEVICE_CHOICES], 3)
+        self._combo(frm, "Детализация:", self.granularity, [c[0] for c in GRANULARITY_CHOICES], 2)
+        self._combo(frm, "Вариант:", self.variant, [c[0] for c in VARIANT_CHOICES], 3)
+        self._combo(frm, "Устройство:", self.device, [c[0] for c in DEVICE_CHOICES], 4)
 
         self.run_btn = ttk.Button(frm, text="Транскрибировать", command=self._start)
-        self.run_btn.grid(row=4, column=0, columnspan=3, pady=(10, 4), sticky="we")
+        self.run_btn.grid(row=5, column=0, columnspan=3, pady=(10, 4), sticky="we")
 
         self.bar = ttk.Progressbar(frm, mode="determinate", maximum=1)
-        self.bar.grid(row=5, column=0, columnspan=3, sticky="we")
+        self.bar.grid(row=6, column=0, columnspan=3, sticky="we")
         ttk.Label(frm, textvariable=self.status, wraplength=320).grid(
-            row=6, column=0, columnspan=3, sticky="w", pady=(6, 0)
+            row=7, column=0, columnspan=3, sticky="w", pady=(6, 0)
         )
 
     def _combo(self, frm, label, var, values, row):
@@ -163,6 +169,7 @@ class TranscribeApp:
         params = dict(
             audio=audio,
             fmt=label_to_value(FORMAT_CHOICES, self.fmt.get()),
+            granularity=label_to_value(GRANULARITY_CHOICES, self.granularity.get()),
             variant=label_to_value(VARIANT_CHOICES, self.variant.get()),
             device=label_to_value(DEVICE_CHOICES, self.device.get()),
         )
@@ -180,6 +187,7 @@ class TranscribeApp:
                 variant=params["variant"],
                 device=params["device"],
                 fmt=params["fmt"],
+                granularity=params["granularity"],
                 on_progress=lambda d, t: self.events.put(("progress", d, t)),
             )
             self.events.put(("done", str(out)))

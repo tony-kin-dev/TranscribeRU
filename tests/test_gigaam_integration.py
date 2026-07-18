@@ -41,3 +41,26 @@ def test_transcribe_short_wav_end_to_end(tmp_path):
     for seg in result.segments:
         assert isinstance(seg.text, str)
         assert seg.end > seg.start
+
+
+@pytest.mark.slow
+def test_transcribe_fine_granularity_end_to_end(tmp_path):
+    """fine-режим на реальной модели: word_timestamps=True не должен падать
+    и не должен тянуть longform/pyannote (окна <25с). Текст на синусе любой."""
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg не установлен")
+
+    wav_path = tmp_path / "tone.wav"
+    subprocess.run(
+        ["ffmpeg", "-nostdin", "-y", "-f", "lavfi",
+         "-i", "sine=frequency=220:duration=3", str(wav_path)],
+        check=True, capture_output=True,
+    )
+
+    engine = GigaAMEngine()
+    result = transcribe(str(wav_path), engine, device="cpu", granularity="fine")
+
+    assert isinstance(result.segments, list)
+    for seg in result.segments:
+        assert isinstance(seg.text, str)
+        assert seg.end >= seg.start

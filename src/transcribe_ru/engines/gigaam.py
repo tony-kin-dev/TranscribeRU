@@ -95,12 +95,22 @@ class GigaAMEngine(Engine):
     def load(self, device: str) -> None:
         self._model = self._model_loader(self.model_name, device)
 
-    def transcribe_segment(self, wav, sr: int) -> str:
+    def _run(self, wav, sr: int, **kwargs):
+        """Записать окно во временный wav и позвать model.transcribe(path, **kwargs).
+
+        Общий «танец» с temp-файлом для transcribe_segment и transcribe_words.
+        """
         if self._model is None:
             raise RuntimeError("Движок не загружен; сначала вызовите load(device).")
         path = _write_temp_wav(wav, sr)
         try:
-            result = self._model.transcribe(path)
+            return self._model.transcribe(path, **kwargs)
         finally:
             os.unlink(path)
-        return str(result).strip()
+
+    def transcribe_segment(self, wav, sr: int) -> str:
+        return str(self._run(wav, sr)).strip()
+
+    def transcribe_words(self, wav, sr: int):
+        # word_timestamps=True зовём только на fine-пути; окна <25с → без longform/pyannote.
+        return getattr(self._run(wav, sr, word_timestamps=True), "words", None)

@@ -4,7 +4,7 @@ import dataclasses
 
 import pytest
 
-from transcribe_ru.core import Segment, TranscriptResult, transcribe
+from transcribe_ru.core import Segment, TranscriptResult, group_words, transcribe
 
 
 def test_segment_is_frozen_dataclass():
@@ -94,3 +94,62 @@ def test_transcribe_works_without_progress_callback():
         segment_fn=lambda wav, sr: _fake_chunks(),
     )
     assert len(result.segments) == 2
+
+
+class _W:
+    """Слово с временами относительно окна — плейсхолдер для group_words."""
+
+    def __init__(self, text, start, end):
+        self.text, self.start, self.end = text, start, end
+
+
+class FineEngine(FakeEngine):
+    """Движок с пословными таймстампами для проверки режима fine."""
+
+    def transcribe_words(self, wav, sr):
+        return [
+            _W("Привет,", 0.0, 0.5), _W("мир.", 0.6, 1.6),
+            _W("Как", 1.7, 2.0), _W("дела?", 2.1, 2.8),
+        ]
+
+
+def test_fine_splits_words_into_cues_with_offset():
+    engine = FineEngine()
+    result = transcribe(
+        "dummy.opus",
+        engine,
+        device="cpu",
+        granularity="fine",
+        load_audio=lambda path: (["full"], 16000),
+        # одно окно со стартом 10.0 — проверяем прибавление offset
+        segment_fn=lambda wav, sr: [(["w"], (10.0, 30.0))],
+    )
+    assert [(round(s.start, 1), round(s.end, 1), s.text) for s in result.segments] == [
+        (10.0, 11.6, "Привет, мир."),   # разрыв по концу предложения + offset
+        (11.7, 12.8, "Как дела?"),
+    ]
+
+
+def test_coarse_ignores_word_timestamps():
+    # granularity=coarse (дефолт) не должен дёргать transcribe_words
+    engine = FineEngine()
+    engine.transcribe_words = lambda wav, sr: (_ for _ in ()).throw(
+        AssertionError("transcribe_words не должен вызываться в coarse")
+    )
+    result = transcribe(
+        "dummy.opus",
+        engine,
+        device="cpu",
+        load_audio=lambda path: (["full"], 16000),
+        segment_fn=lambda wav, sr: _fake_chunks(),
+    )
+    assert len(result.segments) == 2  # обычная покусочная нарезка
+
+
+def test_group_words_degrades_without_punctuation():
+    # без пунктуации режем по паузе (3с > gap)
+    cues = group_words([_W("раз", 0.0, 1.0), _W("два", 4.0, 5.0)], gap=0.6)
+    assert [(c.start, c.end, c.text) for c in cues] == [
+        (0.0, 1.0, "раз"),
+        (4.0, 5.0, "два"),
+    ]

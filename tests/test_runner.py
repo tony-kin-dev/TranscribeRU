@@ -29,7 +29,7 @@ class _FakeEngine:
         return ""
 
 
-def _fake_transcribe(audio_path, engine, *, device, on_progress=None):
+def _fake_transcribe(audio_path, engine, *, device, granularity="coarse", on_progress=None):
     engine.load(device)
     if on_progress:
         on_progress(1, 1)
@@ -65,7 +65,7 @@ def test_transcribe_to_file_resolves_device_and_passes_variant(tmp_path):
     audio.write_bytes(b"x")
     captured = {}
 
-    def transcribe_fn(audio_path, engine, *, device, on_progress=None):
+    def transcribe_fn(audio_path, engine, *, device, granularity="coarse", on_progress=None):
         captured["device"] = device
         captured["variant"] = engine.variant
         return TranscriptResult(segments=[Segment(0.0, 1.0, "а")], language="ru")
@@ -81,6 +81,27 @@ def test_transcribe_to_file_resolves_device_and_passes_variant(tmp_path):
     )
 
     assert captured == {"device": "mps", "variant": "rnnt"}
+
+
+def test_transcribe_to_file_passes_granularity(tmp_path):
+    audio = tmp_path / "rec.opus"
+    audio.write_bytes(b"x")
+    captured = {}
+
+    def transcribe_fn(audio_path, engine, *, device, granularity="coarse", on_progress=None):
+        captured["granularity"] = granularity
+        return TranscriptResult(segments=[Segment(0.0, 1.0, "а")], language="ru")
+
+    transcribe_to_file(
+        str(audio),
+        fmt="srt",
+        granularity="fine",
+        transcribe_fn=transcribe_fn,
+        get_engine_fn=lambda name: _FakeEngine,
+        select_device_fn=lambda d: d,
+    )
+
+    assert captured == {"granularity": "fine"}
 
 
 def test_transcribe_to_file_honors_out_dir(tmp_path):

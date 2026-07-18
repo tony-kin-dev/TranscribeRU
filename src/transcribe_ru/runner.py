@@ -26,6 +26,7 @@ def transcribe_to_file(
     variant: str = "e2e_rnnt",
     device: str = "auto",
     fmt: str = "txt_timecoded",
+    granularity: str = "coarse",
     out_dir: str | None = None,
     on_progress=None,
     # точки инъекции для тестов:
@@ -45,7 +46,8 @@ def transcribe_to_file(
     engine_obj = get_engine_fn(engine)(variant=variant)
 
     result = transcribe_fn(
-        audio_path, engine_obj, device=resolved_device, on_progress=on_progress
+        audio_path, engine_obj, device=resolved_device,
+        granularity=granularity, on_progress=on_progress,
     )
 
     meta = {"engine": engine, "variant": variant}

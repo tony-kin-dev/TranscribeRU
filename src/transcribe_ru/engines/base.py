@@ -30,6 +30,14 @@ class Engine(ABC):
     def transcribe_segment(self, wav, sr: int) -> str:
         """Распознать один кусок звука (<25с) → текст."""
 
+    def transcribe_words(self, wav, sr: int):
+        """Слова с временами ОТНОСИТЕЛЬНО начала окна (объекты с .text/.start/.end),
+        либо None, если движок не умеет пословные таймстампы.
+
+        Не абстрактный: движок обязателен только для `transcribe_segment`.
+        None даёт ядру мягкий откат на крупную нарезку (granularity=coarse)."""
+        return None
+
 
 def register(name: str):
     """Декоратор: зарегистрировать класс движка под именем `name`."""

@@ -93,6 +93,7 @@ pip install -e .
 ```bash
 transcribe-ru --audio file.opus                    # txt с тайм-кодами рядом с исходником
 transcribe-ru --audio file.opus --format srt       # субтитры .srt
+transcribe-ru --audio file.opus --granularity fine # короткие реплики ~5-7с (для субтитров)
 transcribe-ru --audio file.opus --device cpu --out-dir ./out
 transcribe-ru --audio file.opus --dry-run          # показать план, ничего не запуская
 ```
@@ -115,6 +116,7 @@ transcribe-ru --audio file.opus --dry-run          # показать план, 
 | `--variant` | `e2e_rnnt` | Вариант модели: `e2e_rnnt`, `e2e_ctc`, `rnnt`, `ctc` |
 | `--device` | `auto` | `auto` (cuda→mps→cpu), либо явно `cuda`/`mps`/`cpu` |
 | `--format` | `txt_timecoded` | `txt_timecoded`, `txt_plain`, `srt`, `json` |
+| `--granularity` | `coarse` | `coarse` — крупные окна ~20-24с (для чтения); `fine` — короткие реплики ~5-7с (для субтитров) |
 | `--out-dir` | рядом с исходником | Каталог для результата |
 | `--dry-run` | — | Показать план без запуска |
 
@@ -148,6 +150,20 @@ transcribe-ru-gui --install-shortcut
 | `txt_plain` | `.txt` | Сплошной текст без тайм-кодов |
 | `srt` | `.srt` | Стандартные субтитры с индексами и `-->` |
 | `json` | `.json` | `[{start, end, text}, …]` + метаданные (движок, вариант) |
+
+## Гранулярность сегментов (`--granularity`)
+
+Управляет длиной сегментов на выходе — ортогонально формату:
+
+- **`coarse`** *(по умолчанию)* — один сегмент на речевое окно (~20–24 с). Удобно
+  читать и «собирать смысл».
+- **`fine`** — короткие реплики ~5–7 с через пословные таймстампы модели. Разрыв
+  идёт по концу предложения, паузе и длине строки. Для субтитров с точным
+  таймингом (особенно с `--format srt`).
+
+В окне (GUI) — выпадающий список «Детализация». Режим `fine` опирается на
+пословную разметку `e2e`-вариантов; на «сырых» `rnnt`/`ctc` (без пунктуации)
+реплики режутся по паузам и длительности.
 
 ## Варианты модели GigaAM-v3
 

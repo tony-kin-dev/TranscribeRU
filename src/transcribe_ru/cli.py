@@ -11,6 +11,7 @@ from transcribe_ru.engines.gigaam import DEFAULT_VARIANT
 from transcribe_ru.runner import output_path, transcribe_to_file
 
 FORMATS = ("txt_timecoded", "txt_plain", "srt", "json")
+GRANULARITIES = ("coarse", "fine")
 
 # Совместимость: output_path исторически жил в cli; теперь общий, в runner.
 __all__ = ["build_parser", "output_path", "main"]
@@ -30,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--format", default="txt_timecoded", choices=FORMATS, help="Формат вывода",
+    )
+    p.add_argument(
+        "--granularity", default="coarse", choices=GRANULARITIES,
+        help="Гранулярность сегментов: coarse — крупные окна ~20-24с "
+        "(по умолчанию, для чтения); fine — короткие реплики ~5-7с (для субтитров)",
     )
     p.add_argument("--out-dir", default=None, help="Каталог результата (по умолчанию — рядом с исходником)")
     p.add_argument("--dry-run", action="store_true", help="Показать план и выйти")
@@ -71,7 +77,8 @@ def main(
         out_file = output_path(args.audio, args.format, args.out_dir)
         stderr.write(
             f"[dry-run] движок={args.engine} вариант={args.variant} устройство={device}\n"
-            f"[dry-run] {args.audio} → {out_file} (формат {args.format})\n"
+            f"[dry-run] {args.audio} → {out_file} "
+            f"(формат {args.format}, гранулярность {args.granularity})\n"
         )
         return 0
 
@@ -81,6 +88,7 @@ def main(
         variant=args.variant,
         device=args.device,
         fmt=args.format,
+        granularity=args.granularity,
         out_dir=args.out_dir,
         on_progress=_make_progress(stderr),
         transcribe_fn=transcribe_fn,
