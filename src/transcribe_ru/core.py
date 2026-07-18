@@ -28,7 +28,7 @@ class TranscriptResult:
 
 def group_words(
     words, *, offset: float = 0.0, max_dur: float = 7.0, gap: float = 0.6,
-    max_chars: int = 84,
+    max_chars: int = 84, min_dur: float = 1.2, min_chars: int = 6,
 ) -> list[Segment]:
     """Слова (с временами относительно окна) → короткие реплики-`Segment`.
 
@@ -36,6 +36,11 @@ def group_words(
     (последний символ слова в `.!?…`), паузе > `gap`, длительности > `max_dur`
     или длине > `max_chars`. `offset` (начало окна) прибавляется к временам.
     Первое слово реплики не режем — одиночное длинное слово выходит целиком.
+
+    Финальный проход склеивает слишком короткие вставки («Угу», «Да», «И») с
+    соседней репликой, чтобы они не выводились отдельным мелькающим тайм-кодом:
+    реплика короче `min_dur` И с текстом не длиннее `min_chars` приписывается к
+    предыдущей (или, если её нет, к следующей).
 
     Без пунктуации (варианты rnnt/ctc) разрыв по предложению не срабатывает —
     остаются пределы по паузе/длительности/длине (корректная деградация).
@@ -64,7 +69,25 @@ def group_words(
         if w.text and w.text[-1] in ".!?…":
             flush()
     flush()
-    return segments
+
+    # Склейка коротких вставок, чтобы не мелькали отдельными субтитрами.
+    merged: list[Segment] = []
+    pending: Segment | None = None  # короткая реплика в начале, ждущая следующую
+    for seg in segments:
+        if pending is not None:
+            seg = Segment(pending.start, seg.end, f"{pending.text} {seg.text}".strip())
+            pending = None
+        tiny = (seg.end - seg.start) < min_dur and len(seg.text) <= min_chars
+        if tiny and merged:
+            prev = merged[-1]
+            merged[-1] = Segment(prev.start, seg.end, f"{prev.text} {seg.text}".strip())
+        elif tiny:
+            pending = seg  # приклеим к следующей (предыдущей нет)
+        else:
+            merged.append(seg)
+    if pending is not None:
+        merged.append(pending)
+    return merged
 
 
 def transcribe(

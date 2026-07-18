@@ -147,9 +147,32 @@ def test_coarse_ignores_word_timestamps():
 
 
 def test_group_words_degrades_without_punctuation():
-    # без пунктуации режем по паузе (3с > gap)
-    cues = group_words([_W("раз", 0.0, 1.0), _W("два", 4.0, 5.0)], gap=0.6)
-    assert [(c.start, c.end, c.text) for c in cues] == [
-        (0.0, 1.0, "раз"),
-        (4.0, 5.0, "два"),
+    # без пунктуации режем по паузе (2.5с > gap); слова не крошечные → не склеиваются
+    cues = group_words([_W("привет", 0.0, 1.5), _W("здравствуй", 4.0, 5.5)], gap=0.6)
+    assert [(round(c.start, 1), round(c.end, 1), c.text) for c in cues] == [
+        (0.0, 1.5, "привет"),
+        (4.0, 5.5, "здравствуй"),
     ]
+
+
+def test_group_words_merges_short_interjections():
+    # «Угу.» между репликами не должно стать отдельным мелькающим тайм-кодом —
+    # приклеивается к соседней реплике
+    words = [
+        _W("Я", 0.0, 0.3), _W("предлагаю.", 0.4, 1.6),        # реплика 1
+        _W("Угу.", 2.0, 2.6),                                 # короткая вставка
+        _W("Хорошо,", 4.0, 4.6), _W("давайте.", 4.7, 6.0),    # реплика 2
+    ]
+    cues = group_words(words, gap=0.6)
+    texts = [c.text for c in cues]
+    assert "Угу." not in texts               # отдельной реплики «Угу.» нет
+    assert any("Угу." in t for t in texts)   # но текст сохранён внутри соседней
+    assert len(cues) == 2
+
+
+def test_group_words_merges_leading_short_into_next():
+    # короткая вставка в самом начале (предыдущей нет) → приклеивается к следующей
+    cues = group_words([_W("Да.", 0.0, 0.4), _W("Поехали", 2.0, 4.0)], gap=0.6)
+    assert len(cues) == 1
+    assert cues[0].text == "Да. Поехали"
+    assert (round(cues[0].start, 1), round(cues[0].end, 1)) == (0.0, 4.0)
