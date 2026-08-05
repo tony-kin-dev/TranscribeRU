@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import argparse
-import gc
 import sys
 import time
 from pathlib import Path
@@ -77,13 +76,9 @@ def main(argv=None) -> int:
 
     # Импорты проекта откладываем, чтобы --help был мгновенным.
     from transcribe_ru.certs import configure_ssl
-    from transcribe_ru.core import transcribe
-    from transcribe_ru.device import select_device
-    from transcribe_ru.engines.gigaam import GigaAMEngine
-    from transcribe_ru.formatters import EXTENSIONS, format_result
+    from transcribe_ru.runner import transcribe_batch
 
     configure_ssl()
-    ext = EXTENSIONS[args.format]
 
     # Собираем файлы, сортируем по размеру (короткие первыми — раньше виден результат).
     files = sorted(
@@ -98,76 +93,46 @@ def main(argv=None) -> int:
         log(f"В папке нет аудиофайлов: {src_dir}")
         return 1
 
-    device = select_device(args.device)
-    log(f"Устройство: {device}; движок: gigaam/{args.variant}; "
-        f"формат: {args.format}; детализация: {args.granularity}")
-    log(f"Найдено аудиофайлов: {len(files)}")
+    log(f"Движок: gigaam/{args.variant}; формат: {args.format}; "
+        f"детализация: {args.granularity}; устройство: {args.device}")
+    log(f"Найдено аудиофайлов: {len(files)}; загрузка модели (один раз)…")
 
-    log("Загрузка модели (один раз)...")
-    t0 = time.monotonic()
-    engine = GigaAMEngine(variant=args.variant)
-    engine.load(device)
-    # Не перегружать модель на каждом файле: core.transcribe зовёт load() внутри.
-    engine.load = lambda _device: None
-    log(f"Модель загружена за {time.monotonic() - t0:.1f}с")
+    def progress_factory(idx, total, path):
+        p = Path(path)
+        size_mb = p.stat().st_size / 1024 / 1024
+        log(f"[{idx}/{total}] СТАРТ: {p.name} ({size_mb:.0f} МБ)")
+        return _make_progress(p.name[:40])
 
-    meta = {"engine": "gigaam", "variant": args.variant}
-    done = skipped = 0
-    failed: list[tuple[str, str]] = []
+    def on_done(idx, total, path, out_file, n_seg):
+        log(f"[{idx}/{total}] ГОТОВО: {Path(path).name} → {out_file.name} ({n_seg} сегм.)")
+
+    def on_error(idx, total, path, err):
+        log(f"[{idx}/{total}] ОШИБКА: {Path(path).name}: {type(err).__name__}: {err}")
+
+    def on_skip(idx, total, path):
+        log(f"[{idx}/{total}] ПРОПУСК (уже есть): {Path(path).name}")
+
     run_start = time.monotonic()
-
-    for i, src in enumerate(files, 1):
-        out_file = src.with_suffix(ext)
-        size_mb = src.stat().st_size / 1024 / 1024
-
-        if out_file.exists() and out_file.stat().st_size > 0:
-            log(f"[{i}/{len(files)}] ПРОПУСК (уже есть): {src.name}")
-            skipped += 1
-            continue
-
-        log(f"[{i}/{len(files)}] СТАРТ: {src.name} ({size_mb:.0f} МБ)")
-        t_file = time.monotonic()
-        try:
-            result = transcribe(
-                str(src), engine, device=device, granularity=args.granularity,
-                on_progress=_make_progress(src.name[:40]),
-            )
-            text = format_result(result.segments, args.format, meta=meta)
-            # Атомарная запись: сперва во временный файл, затем rename.
-            tmp = out_file.with_suffix(out_file.suffix + ".part")
-            tmp.write_text(text, encoding="utf-8")
-            tmp.replace(out_file)
-
-            dt = time.monotonic() - t_file
-            n_seg = len(result.segments)
-            log(
-                f"[{i}/{len(files)}] ГОТОВО: {src.name} → {out_file.name} "
-                f"({n_seg} сегм., {_fmt_dur(dt)} обработки)"
-            )
-            done += 1
-            del result, text
-        except Exception as exc:  # один битый файл не должен ронять весь прогон
-            log(f"[{i}/{len(files)}] ОШИБКА: {src.name}: {type(exc).__name__}: {exc}")
-            failed.append((src.name, f"{type(exc).__name__}: {exc}"))
-        finally:
-            gc.collect()
-            try:
-                import torch
-
-                if device == "mps":
-                    torch.mps.empty_cache()
-                elif device == "cuda":
-                    torch.cuda.empty_cache()
-            except Exception:
-                pass
-
+    summary = transcribe_batch(
+        [str(f) for f in files],
+        variant=args.variant,
+        device=args.device,
+        fmt=args.format,
+        granularity=args.granularity,
+        skip_existing=True,
+        progress_factory=progress_factory,
+        on_done=on_done,
+        on_error=on_error,
+        on_skip=on_skip,
+    )
     total_dt = time.monotonic() - run_start
+
     log("=" * 60)
-    log(f"ИТОГО: обработано {done}, пропущено {skipped}, ошибок {len(failed)} "
-        f"за {_fmt_dur(total_dt)}")
-    for name, err in failed:
+    log(f"ИТОГО: обработано {len(summary['done'])}, пропущено {len(summary['skipped'])}, "
+        f"ошибок {len(summary['failed'])} за {_fmt_dur(total_dt)}")
+    for name, err in summary["failed"]:
         log(f"  СБОЙ: {name}: {err}")
-    return 0 if not failed else 1
+    return 0 if not summary["failed"] else 1
 
 
 if __name__ == "__main__":

@@ -96,6 +96,8 @@ class TranscribeApp:
         self.root = root
         self.events: "queue.Queue" = queue.Queue()
         self.worker: threading.Thread | None = None
+        self.paths: list[str] = []   # выбранные файлы (мультивыбор → пакет)
+        self._file_prefix = ""       # «Файл N из M: имя» для строки статуса
 
         root.title("TranscribeRU")
         root.resizable(False, False)
@@ -145,11 +147,15 @@ class TranscribeApp:
     def _choose_file(self):
         from tkinter import filedialog
 
-        path = filedialog.askopenfilename(
-            title="Выберите аудио- или видеофайл", filetypes=MEDIA_TYPES
+        paths = filedialog.askopenfilenames(
+            title="Выберите аудио/видео (можно несколько)", filetypes=MEDIA_TYPES
         )
-        if path:
-            self.audio_path.set(path)
+        if paths:
+            self.paths = list(paths)
+            if len(self.paths) == 1:
+                self.audio_path.set(self.paths[0])
+            else:
+                self.audio_path.set(f"Файлов выбрано: {len(self.paths)}")
             self.status.set("Готов к запуску")
 
     def _start(self):
@@ -157,9 +163,8 @@ class TranscribeApp:
 
         if self.worker and self.worker.is_alive():
             return
-        audio = self.audio_path.get().strip()
-        if not audio:
-            messagebox.showwarning("Нет файла", "Сначала выберите аудио- или видеофайл.")
+        if not self.paths:
+            messagebox.showwarning("Нет файлов", "Сначала выберите аудио- или видеофайл(ы).")
             return
 
         self.run_btn.state(["disabled"])
@@ -167,7 +172,7 @@ class TranscribeApp:
         self.status.set("Подготовка модели и аудио…")
 
         params = dict(
-            audio=audio,
+            paths=list(self.paths),
             fmt=label_to_value(FORMAT_CHOICES, self.fmt.get()),
             granularity=label_to_value(GRANULARITY_CHOICES, self.granularity.get()),
             variant=label_to_value(VARIANT_CHOICES, self.variant.get()),
@@ -178,19 +183,23 @@ class TranscribeApp:
         self.root.after(100, self._poll)
 
     def _run_job(self, params):
-        """Фоновый поток: гоняет транскрипцию, шлёт события в очередь."""
-        from transcribe_ru.runner import transcribe_to_file
+        """Фоновый поток: гоняет пакет через одну загрузку модели, шлёт события."""
+        from transcribe_ru.runner import transcribe_batch
+
+        def progress_factory(idx, total, path):
+            self.events.put(("file_start", idx, total, Path(path).name))
+            return lambda d, t: self.events.put(("progress", d, t))
 
         try:
-            out = transcribe_to_file(
-                params["audio"],
+            summary = transcribe_batch(
+                params["paths"],
                 variant=params["variant"],
                 device=params["device"],
                 fmt=params["fmt"],
                 granularity=params["granularity"],
-                on_progress=lambda d, t: self.events.put(("progress", d, t)),
+                progress_factory=progress_factory,
             )
-            self.events.put(("done", str(out)))
+            self.events.put(("batch_done", summary))
         except Exception as exc:  # noqa: BLE001 — показываем пользователю любую ошибку
             self.events.put(("error", str(exc)))
 
@@ -202,19 +211,20 @@ class TranscribeApp:
             while True:
                 event = self.events.get_nowait()
                 kind = event[0]
-                if kind == "progress":
+                if kind == "file_start":
+                    _, idx, total, name = event
+                    self._file_prefix = (
+                        name if total == 1 else f"Файл {idx} из {total}: {name}"
+                    )
+                    self.status.set(self._file_prefix)
+                elif kind == "progress":
                     _, done, total = event
                     self.bar.configure(maximum=max(total, 1), value=done)
-                    self.status.set(f"Распознавание: {done}/{total}")
-                elif kind == "done":
+                    self.status.set(f"{self._file_prefix} — окно {done}/{total}")
+                elif kind == "batch_done":
                     self.bar.configure(value=self.bar["maximum"])
-                    self.status.set(f"Готово: {event[1]}")
                     self.run_btn.state(["!disabled"])
-                    # открыть папку с результатом (не критично, если не вышло)
-                    try:
-                        reveal_in_file_manager(event[1])
-                    except Exception:  # noqa: BLE001
-                        pass
+                    self._show_summary(event[1])
                     return
                 elif kind == "error":
                     self.status.set("Ошибка")
@@ -224,6 +234,25 @@ class TranscribeApp:
         except queue.Empty:
             pass
         self.root.after(100, self._poll)
+
+    def _show_summary(self, summary):
+        """Итог пакета: строка статуса, открыть папку результата, показать сбои."""
+        from tkinter import messagebox
+
+        done, failed = summary["done"], summary["failed"]
+        if len(done) == 1 and not failed:
+            self.status.set(f"Готово: {done[0]}")
+        else:
+            tail = f", ошибок: {len(failed)}" if failed else ""
+            self.status.set(f"Готово файлов: {len(done)}{tail}")
+        if done:
+            try:
+                reveal_in_file_manager(str(done[0]))
+            except Exception:  # noqa: BLE001
+                pass
+        if failed:
+            detail = "\n".join(f"{name}: {err}" for name, err in failed)
+            messagebox.showwarning("Часть файлов не обработана", detail)
 
 
 def run_gui() -> int:
