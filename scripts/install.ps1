@@ -10,6 +10,9 @@ $RepoUrl   = if ($env:REPO_URL) { $env:REPO_URL } else { 'https://github.com/ton
 $Dest      = if ($env:TRANSCRIBE_RU_DIR) { $env:TRANSCRIBE_RU_DIR } else { 'C:\TranscribeRU' }
 $CacheDir  = if ($env:GIGAAM_CACHE_DIR)  { $env:GIGAAM_CACHE_DIR }  else { 'C:\gigaam_cache' }
 
+# Windows PowerShell 5.1 на старых сборках Win10 по умолчанию без TLS 1.2 → iwr не качает
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 function Say($m)  { Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Fail($m) { Write-Host "`n$m" -ForegroundColor Red; Read-Host 'Нажмите Enter для выхода'; exit 1 }
 
@@ -36,6 +39,8 @@ $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' +
 $git = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $git) { $git = "$env:ProgramFiles\Git\cmd\git.exe" }
 if (-not (Test-Path $git)) { Fail "git не найден. Установите вручную: https://git-scm.com/downloads" }
+# pip ставит gigaam через git+https и ищет git в PATH, а не по нашему пути
+$env:Path = (Split-Path $git) + ';' + $env:Path
 
 $pyExe = $null; $pyArgs = @()
 $cands = @(
@@ -61,6 +66,7 @@ if (Test-Path (Join-Path $Dest '.git')) {
 Say 'Создаю окружение и ставлю зависимости (первый раз — несколько минут)...'
 & $pyExe @pyArgs -m venv "$Dest\.venv"
 $venvPy = "$Dest\.venv\Scripts\python.exe"
+if (-not (Test-Path $venvPy)) { Fail "Не удалось создать окружение Python в $Dest\.venv" }
 & $venvPy -m pip install --quiet --upgrade pip
 # БЕЗ -e: editable-режим пишет .pth в ANSI, и Python в UTF-8 его игнорирует
 # на путях с кириллицей → ModuleNotFoundError.
@@ -82,9 +88,15 @@ $files = @('v3_e2e_rnnt.ckpt', 'v3_e2e_rnnt_tokenizer.model')
 foreach ($f in $files) {
   $out = Join-Path $CacheDir $f
   if (Test-Path $out) { continue }
-  try {
-    Invoke-WebRequest -Uri "$cdn/$f" -OutFile $out -MaximumRetryCount 3 -RetryIntervalSec 5
-  } catch {
+  # -MaximumRetryCount есть только в PowerShell 6.1+, а в Windows стоит 5.1 — ретраи руками.
+  # Качаем во временный .part: оборванная закачка не должна выглядеть готовым файлом.
+  $ok = $false
+  foreach ($try in 1..3) {
+    try { Invoke-WebRequest -UseBasicParsing -Uri "$cdn/$f" -OutFile "$out.part"; Move-Item -Force "$out.part" $out; $ok = $true; break }
+    catch { Start-Sleep -Seconds 5 }
+  }
+  if (-not $ok) {
+    Remove-Item -Force "$out.part" -ErrorAction SilentlyContinue
     Write-Host "Не удалось предзагрузить $f — модель скачается при первом запуске." -ForegroundColor Yellow
   }
 }
