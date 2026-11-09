@@ -26,11 +26,14 @@ FORMAT_CHOICES = [
     ("Субтитры (.srt)", "srt"),
     ("JSON (для разработчиков)", "json"),
 ]
-VARIANT_CHOICES = [
-    ("С пунктуацией, точнее (рекомендуется)", "e2e_rnnt"),
-    ("С пунктуацией, быстрее", "e2e_ctc"),
-    ("Без пунктуации, точнее", "rnnt"),
-    ("Без пунктуации, быстрее", "ctc"),
+# Модель = (движок, вариант).
+MODEL_CHOICES = [
+    ("GigaAM: с пунктуацией, точнее (рекомендуется)", ("gigaam", "e2e_rnnt")),
+    ("GigaAM: с пунктуацией, быстрее", ("gigaam", "e2e_ctc")),
+    ("GigaAM: без пунктуации, точнее", ("gigaam", "rnnt")),
+    ("GigaAM: без пунктуации, быстрее", ("gigaam", "ctc")),
+    ("Nemotron 3.5: язык определяет сам", ("nemotron", "auto")),
+    ("Nemotron 3.5: только русский", ("nemotron", "ru-RU")),
 ]
 GRANULARITY_CHOICES = [
     ("Крупные фрагменты (для чтения)", "coarse"),
@@ -107,7 +110,7 @@ class TranscribeApp:
         self.audio_path = tk.StringVar()
         self.fmt = tk.StringVar(value=FORMAT_CHOICES[0][0])
         self.granularity = tk.StringVar(value=GRANULARITY_CHOICES[0][0])
-        self.variant = tk.StringVar(value=VARIANT_CHOICES[0][0])
+        self.model = tk.StringVar(value=MODEL_CHOICES[0][0])
         self.device = tk.StringVar(value=DEVICE_CHOICES[0][0])
         self.status = tk.StringVar(value="Выберите аудио- или видеофайл")
 
@@ -126,7 +129,7 @@ class TranscribeApp:
 
         self._combo(frm, "Формат:", self.fmt, [c[0] for c in FORMAT_CHOICES], 1)
         self._combo(frm, "Детализация:", self.granularity, [c[0] for c in GRANULARITY_CHOICES], 2)
-        self._combo(frm, "Вариант:", self.variant, [c[0] for c in VARIANT_CHOICES], 3)
+        self._combo(frm, "Модель:", self.model, [c[0] for c in MODEL_CHOICES], 3)
         self._combo(frm, "Устройство:", self.device, [c[0] for c in DEVICE_CHOICES], 4)
 
         self.run_btn = ttk.Button(frm, text="Транскрибировать", command=self._start)
@@ -175,7 +178,7 @@ class TranscribeApp:
             paths=list(self.paths),
             fmt=label_to_value(FORMAT_CHOICES, self.fmt.get()),
             granularity=label_to_value(GRANULARITY_CHOICES, self.granularity.get()),
-            variant=label_to_value(VARIANT_CHOICES, self.variant.get()),
+            model=label_to_value(MODEL_CHOICES, self.model.get()),
             device=label_to_value(DEVICE_CHOICES, self.device.get()),
         )
         self.worker = threading.Thread(target=self._run_job, args=(params,), daemon=True)
@@ -193,7 +196,8 @@ class TranscribeApp:
         try:
             summary = transcribe_batch(
                 params["paths"],
-                variant=params["variant"],
+                engine=params["model"][0],
+                variant=params["model"][1],
                 device=params["device"],
                 fmt=params["fmt"],
                 granularity=params["granularity"],

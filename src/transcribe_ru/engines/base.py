@@ -14,7 +14,10 @@ ENGINES: dict[str, type["Engine"]] = {}
 
 # Встроенные движки подгружаются лениво по запросу (чтобы не тянуть torch
 # и тяжёлые зависимости, пока движок реально не нужен).
-_BUILTINS = {"gigaam": "transcribe_ru.engines.gigaam"}
+_BUILTINS = {
+    "gigaam": "transcribe_ru.engines.gigaam",
+    "nemotron": "transcribe_ru.engines.nemotron",
+}
 
 
 class Engine(ABC):

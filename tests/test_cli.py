@@ -12,7 +12,7 @@ def test_parser_defaults():
     args = cli.build_parser().parse_args(["--audio", "f.opus"])
     assert args.audio == "f.opus"
     assert args.engine == "gigaam"
-    assert args.variant == "e2e_rnnt"
+    assert args.variant is None  # движок берёт свой вариант по умолчанию
     assert args.device == "auto"
     assert args.format == "txt_timecoded"
     assert args.granularity == "coarse"

@@ -6,7 +6,7 @@
 
 from transcribe_ru import gui
 from transcribe_ru.cli import FORMATS, GRANULARITIES
-from transcribe_ru.engines.gigaam import VARIANTS
+from transcribe_ru.engines import gigaam, nemotron
 
 
 def _values(choices):
@@ -21,8 +21,9 @@ def test_format_choices_cover_all_formats():
     assert set(_values(gui.FORMAT_CHOICES)) == set(FORMATS)
 
 
-def test_variant_choices_cover_all_variants():
-    assert set(_values(gui.VARIANT_CHOICES)) == set(VARIANTS)
+def test_model_choices_cover_all_engine_variants():
+    expected = {("gigaam", v) for v in gigaam.VARIANTS} | {("nemotron", v) for v in nemotron.VARIANTS}
+    assert set(_values(gui.MODEL_CHOICES)) == expected
 
 
 def test_device_choices_cover_all_devices():
@@ -37,21 +38,21 @@ def test_defaults_are_first_choice():
     # первая подпись — значение по умолчанию
     assert gui.label_to_value(gui.FORMAT_CHOICES, _labels(gui.FORMAT_CHOICES)[0]) == "txt_timecoded"
     assert gui.label_to_value(gui.GRANULARITY_CHOICES, _labels(gui.GRANULARITY_CHOICES)[0]) == "coarse"
-    assert gui.label_to_value(gui.VARIANT_CHOICES, _labels(gui.VARIANT_CHOICES)[0]) == "e2e_rnnt"
+    assert gui.label_to_value(gui.MODEL_CHOICES, _labels(gui.MODEL_CHOICES)[0]) == ("gigaam", "e2e_rnnt")
     assert gui.label_to_value(gui.DEVICE_CHOICES, _labels(gui.DEVICE_CHOICES)[0]) == "auto"
 
 
 def test_labels_are_russian_not_raw_value():
     # подпись не должна совпадать с техническим значением (т.е. она расшифрована)
-    for choices in (gui.FORMAT_CHOICES, gui.GRANULARITY_CHOICES, gui.VARIANT_CHOICES, gui.DEVICE_CHOICES):
+    for choices in (gui.FORMAT_CHOICES, gui.GRANULARITY_CHOICES, gui.MODEL_CHOICES, gui.DEVICE_CHOICES):
         for label, value in choices:
             assert label != value
             assert any("а" <= ch <= "я" or "А" <= ch <= "Я" for ch in label)
 
 
 def test_label_to_value_roundtrip():
-    for label, value in gui.VARIANT_CHOICES:
-        assert gui.label_to_value(gui.VARIANT_CHOICES, label) == value
+    for label, value in gui.MODEL_CHOICES:
+        assert gui.label_to_value(gui.MODEL_CHOICES, label) == value
 
 
 def test_label_to_value_unknown_raises():

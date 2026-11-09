@@ -19,6 +19,10 @@
 - Форматы вывода: `txt_timecoded`, `txt_plain`, `srt`, `json`.
 - Два интерфейса: CLI (`transcribe-ru`) и окно (`transcribe-ru-gui`).
 - Пунктуация и нормализация чисел из коробки (вариант `e2e_rnnt`).
+- Второй движок — **NVIDIA Nemotron 3.5 ASR Streaming** (`--engine nemotron`,
+  в окне — «Модель: Nemotron 3.5»): 40 языков, сам определяет язык (`auto`)
+  или жёстко русский (`--variant ru-RU`), пунктуация из коробки. Веса ~2.5 ГБ
+  качаются в кэш Hugging Face при первом запуске.
 
 ## Как это работает
 

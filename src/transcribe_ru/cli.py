@@ -7,7 +7,6 @@ import sys
 import time
 
 from transcribe_ru.certs import configure_ssl
-from transcribe_ru.engines.gigaam import DEFAULT_VARIANT
 from transcribe_ru.runner import output_path, transcribe_to_file
 
 FORMATS = ("txt_timecoded", "txt_plain", "srt", "json")
@@ -23,8 +22,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Распознавание речи (ASR) на PyTorch-движках; движок по умолчанию — GigaAM-v3.",
     )
     p.add_argument("--audio", required=True, help="Входной аудиофайл")
-    p.add_argument("--engine", default="gigaam", help="Движок ASR (по умолчанию gigaam)")
-    p.add_argument("--variant", default=DEFAULT_VARIANT, help="Вариант модели движка")
+    p.add_argument(
+        "--engine", default="gigaam", choices=("gigaam", "nemotron"),
+        help="Движок ASR (по умолчанию gigaam)",
+    )
+    p.add_argument(
+        "--variant", default=None,
+        help="Вариант модели: gigaam — e2e_rnnt (по умолчанию)/e2e_ctc/rnnt/ctc; "
+        "nemotron — auto (по умолчанию)/ru-RU",
+    )
     p.add_argument(
         "--device", default="auto", choices=("auto", "cuda", "mps", "cpu"),
         help="Устройство вычислений",

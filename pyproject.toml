@@ -17,6 +17,10 @@ dependencies = [
     # корневые сертификаты — лечат CERTIFICATE_VERIFY_FAILED при скачивании
     # модели через urllib (частая беда Python на macOS)
     "certifi",
+    # Движок Nemotron 3.5 (AutoModelForRNNT появился в 5.13); librosa нужна
+    # его feature extractor'у.
+    "transformers>=5.13",
+    "librosa",
 ]
 
 [project.scripts]

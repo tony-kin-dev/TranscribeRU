@@ -90,7 +90,8 @@ class GigaAMEngine(Engine):
     name = "gigaam"
     language = "ru"
 
-    def __init__(self, variant: str = DEFAULT_VARIANT, *, model_loader=None):
+    def __init__(self, variant: str | None = None, *, model_loader=None):
+        variant = variant or DEFAULT_VARIANT
         if variant not in VARIANTS:
             raise ValueError(
                 f"Неизвестный вариант {variant!r}; допустимы: {', '.join(VARIANTS)}"

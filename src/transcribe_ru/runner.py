@@ -50,7 +50,7 @@ def transcribe_to_file(
     audio_path,
     *,
     engine: str = "gigaam",
-    variant: str = "e2e_rnnt",
+    variant: str | None = None,  # None → вариант движка по умолчанию
     device: str = "auto",
     fmt: str = "txt_timecoded",
     granularity: str = "coarse",
@@ -78,7 +78,7 @@ def transcribe_to_file(
     )
 
     out_file = output_path(audio_path, fmt, out_dir)
-    _write_result(result, fmt, {"engine": engine, "variant": variant}, out_file)
+    _write_result(result, fmt, {"engine": engine, "variant": engine_obj.variant}, out_file)
     return out_file
 
 
@@ -86,7 +86,7 @@ def transcribe_batch(
     paths,
     *,
     engine: str = "gigaam",
-    variant: str = "e2e_rnnt",
+    variant: str | None = None,  # None → вариант движка по умолчанию
     device: str = "auto",
     fmt: str = "txt_timecoded",
     granularity: str = "coarse",
@@ -131,7 +131,7 @@ def transcribe_batch(
     engine_obj.load(resolved_device)         # модель грузится ОДИН раз на весь пакет
     engine_obj.load = lambda _device: None   # дальше core.transcribe её не перегружает
 
-    meta = {"engine": engine, "variant": variant}
+    meta = {"engine": engine, "variant": engine_obj.variant}
     total = len(paths)
     done: list[Path] = []
     skipped: list[str] = []
