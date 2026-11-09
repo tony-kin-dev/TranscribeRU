@@ -22,7 +22,10 @@ def load(path: str, *, ffmpeg_bin: str = "ffmpeg", sample_rate: int = SAMPLE_RAT
         "-",
     ]
     try:
-        proc = subprocess.run(cmd, capture_output=True)
+        proc = subprocess.run(
+            cmd, capture_output=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
     except FileNotFoundError as exc:
         raise RuntimeError(
             f"ffmpeg не найден ({ffmpeg_bin!r}). Установите его: "

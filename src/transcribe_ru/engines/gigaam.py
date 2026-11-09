@@ -16,8 +16,10 @@ pyannote НЕ требуется: он живёт в extra `gigaam[longform]`, �
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 import wave
+from functools import partial
 
 import numpy as np
 
@@ -54,6 +56,12 @@ def _default_model_loader(model_name: str, device: str):
     модели направляем в ASCII-папку (см. `_resolve_cache_dir`).
     """
     import gigaam
+
+    if os.name == "nt":
+        # GigaAM запускает ffmpeg отдельно для каждого фрагмента.
+        gigaam.preprocess.run = partial(
+            subprocess.run, creationflags=subprocess.CREATE_NO_WINDOW,
+        )
 
     fp16_encoder = device not in ("cpu", None)
     kwargs = {"fp16_encoder": fp16_encoder, "device": device}
